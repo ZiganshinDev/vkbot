@@ -14,22 +14,6 @@ import (
 	longpoll "github.com/SevereCloud/vksdk/longpoll-bot"
 )
 
-var response struct {
-	Text      string `json:"text"`
-	Institute string `json:"institute"`
-	Course    string `json:"course"`
-	GroupID   string `json:"groupid"`
-	Week      string `json:"week"`
-}
-
-var query struct {
-	Text      string `json:"text"`
-	Institute string `json:"institute"`
-	Course    string `json:"course"`
-	GroupID   string `json:"groupid"`
-	Week      string `json:"week"`
-}
-
 func CreateBot() {
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
 
@@ -52,12 +36,20 @@ func CreateBot() {
 }
 
 func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
-	days := map[string]struct{}{
-		"Понедельник": struct{}{},
-		"Вторник":     struct{}{},
-		"Среда":       struct{}{},
-		"Четверг":     struct{}{},
-		"Пятница":     struct{}{},
+	var response struct {
+		Text      string `json:"text"`
+		Institute string `json:"institute"`
+		Course    string `json:"course"`
+		GroupID   string `json:"groupid"`
+		Week      string `json:"week"`
+	}
+
+	var query struct {
+		Text      string `json:"text"`
+		Institute string `json:"institute"`
+		Course    string `json:"course"`
+		GroupID   string `json:"groupid"`
+		Week      string `json:"week"`
 	}
 
 	lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
@@ -143,10 +135,10 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 				log.Fatal(err)
 			}
 
-		} else if response.Week == "Нечетная неделя" && checkInMap(obj.Message.Text, days) {
+		} else if response.Week == "Нечетная неделя" && isDayOfWeek(obj.Message.Text) {
 			b.Message(database.DBShowSchedule(query.Institute, query.Course, query.GroupID, "Нечетная", obj.Message.Text))
 
-		} else if response.Week == "Четная неделя" && checkInMap(obj.Message.Text, days) {
+		} else if response.Week == "Четная неделя" && isDayOfWeek(obj.Message.Text) {
 			b.Message(database.DBShowSchedule(query.Institute, query.Course, query.GroupID, "Четная", obj.Message.Text))
 
 		} else {
@@ -157,10 +149,14 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 	})
 }
 
-func checkInMap(obj string, m map[string]struct{}) bool {
-	if _, inMap := m[obj]; inMap {
-		return true
+func isDayOfWeek(day string) bool {
+	days := map[string]bool{
+		"Понедельник": true,
+		"Вторник":     true,
+		"Среда":       true,
+		"Четверг":     true,
+		"Пятница":     true,
 	}
 
-	return false
+	return days[day]
 }
