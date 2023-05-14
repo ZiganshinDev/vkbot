@@ -44,7 +44,7 @@ func DBShowSchedule(institute string, course string, group_number string, week_t
 
 	var schedules []models.Schedule
 
-	rows, err := db.Query(fmt.Sprintf("select * from schedule where institute = '%v' AND course = %v AND group_number = %v AND week_type = '%v' AND lesson_day = '%v' order by lesson_number asc;", institute, course, group_number, week_type, lesson_day))
+	rows, err := db.Query(fmt.Sprintf("select * from schedule where institute = '%v' AND course = %v AND group_number = %v AND week_type = '%v' AND day_of_the_week = '%v' order by lesson_number asc;", institute, course, group_number, week_type, lesson_day))
 	if err != nil {
 		log.Println(err)
 	}
@@ -71,11 +71,7 @@ func DBShowSchedule(institute string, course string, group_number string, week_t
 	result = strings.Replace(result, " ", "\n", -1)
 	result = strings.Replace(result, "_", " ", -1)
 
-	if result != "" {
-		return result
-	} else {
-		return "Тут пусто"
-	}
+	return result
 }
 
 func IsInstitute(institute_id string) bool {

@@ -52,12 +52,12 @@ func CreateBot() {
 }
 
 func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
-	days := map[string]string{
-		"Понедельник": "Понедельник",
-		"Вторник":     "Вторник",
-		"Среда":       "Среда",
-		"Четверг":     "Четверг",
-		"Пятница":     "Пятница",
+	days := map[string]struct{}{
+		"Понедельник": struct{}{},
+		"Вторник":     struct{}{},
+		"Среда":       struct{}{},
+		"Четверг":     struct{}{},
+		"Пятница":     struct{}{},
 	}
 
 	lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
@@ -157,7 +157,7 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 	})
 }
 
-func checkInMap(obj string, m map[string]string) bool {
+func checkInMap(obj string, m map[string]struct{}) bool {
 	if _, inMap := m[obj]; inMap {
 		return true
 	}
