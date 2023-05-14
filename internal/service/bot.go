@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -59,89 +58,60 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 
 		log.Printf("%d: %s", obj.Message.PeerID, obj.Message.Text)
 
-		if obj.Message.Text == "Начать" || obj.Message.Text == "Вернуться" {
+		switch {
+		case obj.Message.Text == "Начать" || obj.Message.Text == "Вернуться":
+			response.Text = obj.Message.Text
 			b.Message("Я бот-дневник МГСУ. С какого ты института?")
 			b.Keyboard(getKeyboard("institute"))
 
-			err := vk.Execute(fmt.Sprintf(`return {text: "%v"};`, obj.Message.Text), &response)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-		} else if response.Text == "Начать" || response.Text == "Вернуться" {
+		case response.Text == "Начать" || response.Text == "Вернуться":
 			if database.IsInstitute(obj.Message.Text) {
+				response.Institute = obj.Message.Text
+				query.Institute = obj.Message.Text
+				response.Text = ""
 				b.Message("С какого ты курса?")
 				b.Keyboard(getKeyboard("course"))
-
-				err := vk.Execute(fmt.Sprintf(`return {institute: "%v", text: ""};`, obj.Message.Text), &response)
-				if err != nil {
-					log.Fatal(err)
-				}
 			} else {
 				b.Message("Такого института не существует")
 			}
 
-		} else if response.Institute != "" {
-			if _, err := strconv.Atoi(string(obj.Message.Text[0])); err == nil {
-				if database.IsCourse(string(obj.Message.Text[0])) {
-					b.Message("Из какой ты группы?")
-
-					query.Institute = response.Institute
-					err := vk.Execute(fmt.Sprintf(`return {course: "%v", institute: ""};`, obj.Message.Text), &response)
-					if err != nil {
-						log.Fatal(err)
-					}
-				} else {
-					b.Message("Такого курса не существует")
-				}
+		case response.Institute != "":
+			if _, err := strconv.Atoi(string(obj.Message.Text[0])); err == nil && database.IsCourse(string(obj.Message.Text[0])) {
+				response.Course = string(obj.Message.Text[0])
+				query.Course = string(obj.Message.Text[0])
+				response.Institute = ""
+				b.Message("Из какой ты группы?")
 			} else {
 				b.Message("Такого курса не существует")
 			}
-		} else if response.Course != "" {
-			if _, err := strconv.Atoi(obj.Message.Text); err == nil {
-				if database.IsGroup(obj.Message.Text) {
-					b.Message("Четная или нечетная неделя?")
-					b.Keyboard(getKeyboard("week"))
 
-					query.Course = string(response.Course[0])
-					err := vk.Execute(fmt.Sprintf(`return {groupid: "%v", course: ""};`, obj.Message.Text), &response)
-					if err != nil {
-						log.Fatal(err)
-					}
-				} else {
-					b.Message("Такой группы не существует")
-				}
+		case response.Course != "":
+			if _, err := strconv.Atoi(obj.Message.Text); err == nil && database.IsGroup(obj.Message.Text) {
+				response.GroupID = obj.Message.Text
+				query.GroupID = obj.Message.Text
+				response.Course = ""
+				b.Message("Четная или нечетная неделя?")
+				b.Keyboard(getKeyboard("week"))
 			} else {
 				b.Message("Такой группы не существует")
 			}
 
-		} else if response.GroupID != "" && obj.Message.Text == "Нечетная неделя" {
-			b.Message("Нечетная неделя")
-			b.Keyboard(getKeyboard("oddweek"))
-
-			query.GroupID = response.GroupID
-			err := vk.Execute(fmt.Sprintf(`return {week: "%v"};`, obj.Message.Text), &response)
-			if err != nil {
-				log.Fatal(err)
+		case response.GroupID != "" && (obj.Message.Text == "Нечетная неделя" || obj.Message.Text == "Четная неделя"):
+			response.Week = obj.Message.Text
+			response.GroupID = ""
+			b.Message(response.Week)
+			if response.Week == "Нечетная неделя" {
+				response.Week = "Нечетная"
+				b.Keyboard(getKeyboard("oddweek"))
+			} else {
+				response.Week = "Четная"
+				b.Keyboard(getKeyboard("evenweek"))
 			}
 
-		} else if response.GroupID != "" && obj.Message.Text == "Четная неделя" {
-			b.Message("Четная неделя")
-			b.Keyboard(getKeyboard("evenweek"))
+		case response.Week != "" && isDayOfWeek(obj.Message.Text):
+			b.Message(database.DBShowSchedule(query.Institute, query.Course, query.GroupID, response.Week, obj.Message.Text))
 
-			query.GroupID = response.GroupID
-			err := vk.Execute(fmt.Sprintf(`return {week: "%v"};`, obj.Message.Text), &response)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-		} else if response.Week == "Нечетная неделя" && isDayOfWeek(obj.Message.Text) {
-			b.Message(database.DBShowSchedule(query.Institute, query.Course, query.GroupID, "Нечетная", obj.Message.Text))
-
-		} else if response.Week == "Четная неделя" && isDayOfWeek(obj.Message.Text) {
-			b.Message(database.DBShowSchedule(query.Institute, query.Course, query.GroupID, "Четная", obj.Message.Text))
-
-		} else {
+		default:
 			b.Message("Я не понимаю твоего сообщения")
 		}
 
