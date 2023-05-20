@@ -12,7 +12,7 @@ func getKeyboard(str string) string {
 				"label": "ИАГ"
 				},
 				"color": "primary"
-				}	
+				}
 			]
 		]
 		}`,
