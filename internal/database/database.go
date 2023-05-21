@@ -88,18 +88,50 @@ func AddUser(institute, course, group_number, user_peer_id string) {
 	}
 
 	log.Printf("Inserted a single record %v", id)
-
 }
 
-func UpdateUser() {
+func UpdateUser(institute, course, group_number, user_peer_id string) {
+	db := createConnection()
+	defer db.Close()
 
+	sqlStatement := `UPDATE users SET institute = $1, course = $2, group_number = $3 WHERE user_peer_id = $4;`
+
+	var id int
+
+	err := db.QueryRow(sqlStatement, institute, course, group_number, user_peer_id).Scan(&id)
+	if err != nil {
+		log.Fatalf("Unable to execute the query. %v", err)
+	}
+
+	log.Printf("Inserted a single record %v", id)
 }
 
 func DeleteUser(user_peer_id string) int64 {
 	db := createConnection()
 	defer db.Close()
 
-	sqlStatement := `DELETE FROM users WHERE user_peer_id = $1`
+	sqlStatement := `DELETE FROM users WHERE user_peer_id = $1;`
+
+	res, err := db.Exec(sqlStatement, user_peer_id)
+	if err != nil {
+		log.Fatalf("Unable to execute the query. %v", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		log.Fatalf("Error while checking the affected rows. %v", err)
+	}
+
+	log.Printf("Total rows/deleted affected %v", rowsAffected)
+
+	return rowsAffected
+}
+
+func ClearUser(user_peer_id string) int64 {
+	db := createConnection()
+	defer db.Close()
+
+	sqlStatement := `UPDATE users SET institute = '', course = 0, group_number = 0, week_type = '' WHERE user_peer_id = $1;`
 
 	res, err := db.Exec(sqlStatement, user_peer_id)
 	if err != nil {
@@ -116,11 +148,11 @@ func DeleteUser(user_peer_id string) int64 {
 	return rowsAffected
 }
 
-func CheckSchedule(institute, course, group_number string) bool {
+func UserInBase(user_peer_id string) bool {
 	db := createConnection()
 	defer db.Close()
 
-	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(lesson_id) FROM schedule WHERE institute = '%v' AND course = %v AND group_number = %v;", institute, course, group_number))
+	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(user_peer_id) FROM users WHERE user_peer_id = %v;", user_peer_id))
 	if err != nil {
 		log.Println(err)
 	}
@@ -142,11 +174,11 @@ func CheckSchedule(institute, course, group_number string) bool {
 	return true
 }
 
-func CheckUser(user_peer_id string) bool {
+func EmptyUser(user_peer_id string) bool {
 	db := createConnection()
 	defer db.Close()
 
-	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(user_peer_id) FROM users WHERE user_peer_id = %v;", user_peer_id))
+	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(user_peer_id) FROM users WHERE user_peer_id = %v AND institute = '';", user_peer_id))
 	if err != nil {
 		log.Println(err)
 	}
@@ -193,6 +225,7 @@ func CheckUserWithWeekType(user_peer_id string) bool {
 
 	return true
 }
+
 func AddWeekToUser(week_type, user_peer_id string) {
 	db := createConnection()
 	defer db.Close()
@@ -210,4 +243,30 @@ func AddWeekToUser(week_type, user_peer_id string) {
 	}
 
 	log.Printf("Total rows/record affected %v", rowsAffected)
+}
+
+func CheckSchedule(institute, course, group_number string) bool {
+	db := createConnection()
+	defer db.Close()
+
+	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(lesson_id) FROM schedule WHERE institute = '%v' AND course = %v AND group_number = %v;", institute, course, group_number))
+	if err != nil {
+		log.Println(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c models.IsUser
+		err := rows.Scan(&c.UserCount)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		if c.UserCount == 0 {
+			return false
+		}
+	}
+
+	return true
 }

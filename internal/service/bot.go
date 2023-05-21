@@ -61,7 +61,7 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 
 // handleStartMessage обрабатывает команду начала и возвращения
 func handleStartMessage(userPeerID string, b *params.MessagesSendBuilder) {
-	if database.CheckUser(userPeerID) {
+	if database.UserInBase(userPeerID) {
 		database.DeleteUser(userPeerID)
 	}
 	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
@@ -69,7 +69,7 @@ func handleStartMessage(userPeerID string, b *params.MessagesSendBuilder) {
 
 // handleUserMessage обрабатывает сообщения пользователя
 func handleUserMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {
-	if !database.CheckUser(userPeerID) {
+	if !database.UserInBase(userPeerID) {
 		handleFirstMessage(userPeerID, userMsg, b)
 	} else if !database.CheckUserWithWeekType(userPeerID) {
 		handleWeekTypeMessage(userPeerID, userMsg, b)
@@ -88,6 +88,18 @@ func handleFirstMessage(userPeerID, userMsg string, b *params.MessagesSendBuilde
 		b.Message("Я не понимаю твоего сообщения")
 	} else {
 		database.AddUser(text[0], text[1], text[2], userPeerID)
+		b.Message("Выбери неделю")
+		b.Keyboard(getKeyboard("week"))
+	}
+}
+
+func handleUpdateMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {
+	userMsg = strings.TrimSpace(userMsg)
+	text := strings.Split(userMsg, " ")
+	if len(text) != 3 || !database.CheckSchedule(text[0], text[1], text[2]) {
+		b.Message("Я не понимаю твоего сообщения")
+	} else {
+		database.UpdateUser(text[0], text[1], text[2], userPeerID)
 		b.Message("Выбери неделю")
 		b.Keyboard(getKeyboard("week"))
 	}
