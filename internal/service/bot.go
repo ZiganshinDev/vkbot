@@ -14,6 +14,7 @@ import (
 	longpoll "github.com/SevereCloud/vksdk/longpoll-bot"
 )
 
+// CreateBot создает и запускает бота
 func CreateBot() {
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
 
@@ -35,6 +36,7 @@ func CreateBot() {
 	}
 }
 
+// botHandler обрабатывает сообщения бота
 func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 	lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
 		b := params.NewMessagesSendBuilder()
@@ -43,47 +45,76 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 
 		log.Printf("%d: %s", obj.Message.PeerID, obj.Message.Text)
 
-		userPeerId := strconv.Itoa(obj.Message.PeerID)
+		userPeerID := strconv.Itoa(obj.Message.PeerID)
 		userMsg := obj.Message.Text
 
+		// Обработка команд начала и возвращения
 		if userMsg == "Начать" || userMsg == "Вернуться" {
-			if database.CheckUser(userPeerId) {
-				database.DeleteUser(userPeerId)
-			}
-			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
-		} else if !database.CheckUser(userPeerId) {
-			userMsg = strings.TrimSpace(userMsg)
-			text := strings.Split(userMsg, " ")
-			if len(text) != 3 || !database.CheckSchedule(text[0], text[1], text[2]) {
-				b.Message("Я не понимаю твоего сообщения")
-			} else {
-				database.AddUser(text[0], text[1], text[2], userPeerId)
-				b.Message("Выбери неделю")
-				b.Keyboard(getKeyboard("week"))
-			}
-		} else if !database.CheckUserWithWeekType(userPeerId) {
-			if userMsg == "Нечетная неделя" || userMsg == "Четная неделя" {
-				weekType := strings.Split(userMsg, " ")[0]
-				database.AddWeekToUser(weekType, userPeerId)
-				b.Message("Выбери день недели")
-				if userMsg == "Нечетная неделя" {
-					b.Keyboard(getKeyboard("oddweek"))
-				} else {
-					b.Keyboard(getKeyboard("evenweek"))
-				}
-			} else {
-				b.Message("Я не понимаю твоего сообщения")
-			}
-		} else if isDayOfWeek(userMsg) {
-			b.Message(database.DBShowSchedule(userMsg, userPeerId))
+			handleStartMessage(userPeerID, b)
 		} else {
-			b.Message("Я не понимаю твоего сообщения")
+			handleUserMessage(userPeerID, userMsg, b)
 		}
 
 		vk.MessagesSend(b.Params)
 	})
 }
 
+// handleStartMessage обрабатывает команду начала и возвращения
+func handleStartMessage(userPeerID string, b *params.MessagesSendBuilder) {
+	if database.CheckUser(userPeerID) {
+		database.DeleteUser(userPeerID)
+	}
+	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+}
+
+// handleUserMessage обрабатывает сообщения пользователя
+func handleUserMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {
+	if !database.CheckUser(userPeerID) {
+		handleFirstMessage(userPeerID, userMsg, b)
+	} else if !database.CheckUserWithWeekType(userPeerID) {
+		handleWeekTypeMessage(userPeerID, userMsg, b)
+	} else if isDayOfWeek(userMsg) {
+		handleDayOfWeekMessage(userPeerID, userMsg, b)
+	} else {
+		b.Message("Я не понимаю твоего сообщения")
+	}
+}
+
+// handleFirstMessage обрабатывает первое сообщение пользователя
+func handleFirstMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {
+	userMsg = strings.TrimSpace(userMsg)
+	text := strings.Split(userMsg, " ")
+	if len(text) != 3 || !database.CheckSchedule(text[0], text[1], text[2]) {
+		b.Message("Я не понимаю твоего сообщения")
+	} else {
+		database.AddUser(text[0], text[1], text[2], userPeerID)
+		b.Message("Выбери неделю")
+		b.Keyboard(getKeyboard("week"))
+	}
+}
+
+// handleWeekTypeMessage обрабатывает сообщение о выборе типа недели
+func handleWeekTypeMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {
+	if userMsg == "Нечетная неделя" || userMsg == "Четная неделя" {
+		weekType := strings.Split(userMsg, " ")[0]
+		database.AddWeekToUser(weekType, userPeerID)
+		b.Message("Выбери день недели")
+		if userMsg == "Нечетная неделя" {
+			b.Keyboard(getKeyboard("oddweek"))
+		} else {
+			b.Keyboard(getKeyboard("evenweek"))
+		}
+	} else {
+		b.Message("Я не понимаю твоего сообщения")
+	}
+}
+
+// handleDayOfWeekMessage обрабатывает сообщение о выборе дня недели
+func handleDayOfWeekMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {
+	b.Message(database.DBShowSchedule(userMsg, userPeerID))
+}
+
+// isDayOfWeek проверяет, является ли строка днем недели
 func isDayOfWeek(day string) bool {
 	days := map[string]bool{
 		"Понедельник": true,
