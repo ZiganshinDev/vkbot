@@ -36,85 +36,46 @@ func CreateBot() {
 }
 
 func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
-	var response struct {
-		text      string
-		week_type string
-	}
-
-	var schedule struct {
-		institute    string
-		course       string
-		group_number string
-	}
-
 	lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
 		b := params.NewMessagesSendBuilder()
 		b.RandomID(0)
 		b.PeerID(obj.Message.PeerID)
 
 		log.Printf("%d: %s", obj.Message.PeerID, obj.Message.Text)
-		log.Println(groupID)
 
-		if database.CheckUser(strconv.Itoa(obj.Message.PeerID)) && obj.Message.Text == "Начать" {
-			database.DeleteUser(strconv.Itoa(obj.Message.PeerID))
-			response.text = obj.Message.Text
-			b.Message("Напиши свои данные вот так \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+		userPeerId := strconv.Itoa(obj.Message.PeerID)
+		userMsg := obj.Message.Text
 
-		} else if !database.CheckUser(strconv.Itoa(obj.Message.PeerID)) && obj.Message.Text == "Начать" {
-			response.text = obj.Message.Text
-			b.Message("Напиши свои данные вот так \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
-
-		} else if response.text == "Начать" {
-			obj.Message.Text = strings.TrimSpace(obj.Message.Text)
-			text := strings.Split(obj.Message.Text, " ")
-			response.text = ""
-
-			if len(text) != 3 {
+		if userMsg == "Начать" || userMsg == "Вернуться" {
+			if database.CheckUser(userPeerId) {
+				database.DeleteUser(userPeerId)
+			}
+			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+		} else if !database.CheckUser(userPeerId) {
+			userMsg = strings.TrimSpace(userMsg)
+			text := strings.Split(userMsg, " ")
+			if len(text) != 3 || !database.CheckSchedule(text[0], text[1], text[2]) {
 				b.Message("Я не понимаю твоего сообщения")
-
 			} else {
-				schedule.institute = text[0]
-				schedule.course = text[1]
-				schedule.group_number = text[2]
-
-				if database.CheckSchedule(schedule.institute, schedule.course, schedule.group_number) {
-					database.AddUser(schedule.institute, schedule.course, schedule.group_number, strconv.Itoa(obj.Message.PeerID))
-
-					b.Message("Выбери неделю")
-					b.Keyboard(getKeyboard("week"))
-
+				database.AddUser(text[0], text[1], text[2], userPeerId)
+				b.Message("Выбери неделю")
+				b.Keyboard(getKeyboard("week"))
+			}
+		} else if !database.CheckUserWithWeekType(userPeerId) {
+			if userMsg == "Нечетная неделя" || userMsg == "Четная неделя" {
+				weekType := strings.Split(userMsg, " ")[0]
+				database.AddWeekToUser(weekType, userPeerId)
+				b.Message("Выбери день недели")
+				if userMsg == "Нечетная неделя" {
+					b.Keyboard(getKeyboard("oddweek"))
 				} else {
-					b.Message("Я не понимаю твоего сообщения")
+					b.Keyboard(getKeyboard("evenweek"))
 				}
-			}
-
-		} else if database.CheckUser(strconv.Itoa(obj.Message.PeerID)) && !database.CheckUserWithWeekType(strconv.Itoa(obj.Message.PeerID)) {
-			if obj.Message.Text == "Нечетная неделя" {
-				response.week_type = "Нечетная"
-
-				database.AddWeekToUser(response.week_type, strconv.Itoa(obj.Message.PeerID))
-				b.Message("Выбери день недели")
-				b.Keyboard(getKeyboard("oddweek"))
-
-			} else if obj.Message.Text == "Четная неделя" {
-				response.week_type = "Четная"
-
-				database.AddWeekToUser(response.week_type, strconv.Itoa(obj.Message.PeerID))
-				b.Message("Выбери день недели")
-				b.Keyboard(getKeyboard("evenweek"))
-
 			} else {
 				b.Message("Я не понимаю твоего сообщения")
 			}
-
-		} else if database.CheckUserWithWeekType(strconv.Itoa(obj.Message.PeerID)) {
-			if isDayOfWeek(obj.Message.Text) {
-				b.Message(database.DBShowSchedule(obj.Message.Text, strconv.Itoa(obj.Message.PeerID)))
-
-			} else {
-				b.Message("Я не понимаю твоего сообщения")
-			}
-
+		} else if isDayOfWeek(userMsg) {
+			b.Message(database.DBShowSchedule(userMsg, userPeerId))
 		} else {
 			b.Message("Я не понимаю твоего сообщения")
 		}
