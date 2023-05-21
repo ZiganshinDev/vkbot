@@ -172,7 +172,7 @@ func CheckUserWithWeekType(user_peer_id string) bool {
 	db := createConnection()
 	defer db.Close()
 
-	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(user_peer_id) FROM users WHERE user_peer_id = %v AND week_type <> null;", user_peer_id))
+	rows, err := db.Query(fmt.Sprintf("SELECT COUNT(user_peer_id) FROM users WHERE user_peer_id = %v AND week_type <> '';", user_peer_id))
 	if err != nil {
 		log.Println(err)
 	}

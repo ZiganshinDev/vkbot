@@ -88,7 +88,7 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 				}
 			}
 
-		} else if database.CheckUser(strconv.Itoa(obj.Message.PeerID)) {
+		} else if database.CheckUser(strconv.Itoa(obj.Message.PeerID)) && !database.CheckUserWithWeekType(strconv.Itoa(obj.Message.PeerID)) {
 			if obj.Message.Text == "Нечетная неделя" {
 				response.week_type = "Нечетная"
 
@@ -109,7 +109,7 @@ func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
 
 		} else if database.CheckUserWithWeekType(strconv.Itoa(obj.Message.PeerID)) {
 			if isDayOfWeek(obj.Message.Text) {
-				b.Message(database.DBShowSchedule(strconv.Itoa(obj.Message.PeerID), obj.Message.Text))
+				b.Message(database.DBShowSchedule(obj.Message.Text, strconv.Itoa(obj.Message.PeerID)))
 
 			} else {
 				b.Message("Я не понимаю твоего сообщения")
