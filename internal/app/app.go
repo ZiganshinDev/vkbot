@@ -3,9 +3,9 @@ package app
 import (
 	"os"
 
-	"github.com/ZiganshinDev/My-Pet-Projects/scheduleVKBot/internal/config"
-	"github.com/ZiganshinDev/My-Pet-Projects/scheduleVKBot/internal/lib/logger/sl"
-	"github.com/ZiganshinDev/My-Pet-Projects/scheduleVKBot/internal/storage/sqlite"
+	"github.com/ZiganshinDev/scheduleVKBot/internal/config"
+	"github.com/ZiganshinDev/scheduleVKBot/internal/lib/logger/sl"
+	"github.com/ZiganshinDev/scheduleVKBot/internal/storage/sqlite"
 	"golang.org/x/exp/slog"
 )
 

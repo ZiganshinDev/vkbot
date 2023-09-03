@@ -1,6 +1,6 @@
 package main
 
-import "github.com/ZiganshinDev/My-Pet-Projects/scheduleVKBot/internal/app"
+import "github.com/ZiganshinDev/scheduleVKBot/internal/app"
 
 func main() {
 	app.Start()

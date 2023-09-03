@@ -1,4 +1,4 @@
-module github.com/ZiganshinDev/My-Pet-Projects/scheduleVKBot
+module github.com/ZiganshinDev/scheduleVKBot
 
 go 1.20
 
