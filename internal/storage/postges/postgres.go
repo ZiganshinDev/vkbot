@@ -1,4 +1,4 @@
-package database
+package postges
 
 import (
 	"database/sql"
@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	host   = "localhost"
+	host   = "dumbo.db.elephantsql.com"
 	port   = 5432
-	user   = "postgres"
-	dbname = "VKbot"
+	user   = "ixkoioyq"
+	dbname = "ixkoioyq"
 )
 
 func createConnection() *sql.DB {
@@ -200,7 +200,7 @@ func EmptyUser(user_peer_id string) bool {
 	return true
 }
 
-func CheckUserWithWeekType(user_peer_id string) bool {
+func UserHaveWeekType(user_peer_id string) bool {
 	db := createConnection()
 	defer db.Close()
 
