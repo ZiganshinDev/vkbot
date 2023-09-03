@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ZiganshinDev/scheduleVKBot/internal/models"
+	"github.com/ZiganshinDev/My-Pet-Projects/scheduleVKBot/internal/models"
 	_ "github.com/lib/pq"
 )
 
