@@ -39,18 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	_ = storage
-
-	bot, err := vkbot.New()
-	if err != nil {
-		log.Error("failed to init bot", sl.Err(err))
-	}
-
-	vkbot.BotHandler(bot)
-
-	// TODO: init router: chi
-
-	// TODO: init server
+	vkbot.New(storage)
 }
 
 func setupLogger(env string) *slog.Logger {
