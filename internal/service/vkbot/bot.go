@@ -1,66 +1,76 @@
-package service
+package vkbot
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/SevereCloud/vksdk/api"
+	"github.com/SevereCloud/vksdk/api/params"
+	"github.com/SevereCloud/vksdk/object"
 
 	longpoll "github.com/SevereCloud/vksdk/longpoll-bot"
 )
 
+type VkBot struct {
+	vk *api.VK
+	lp *longpoll.Longpoll
+}
+
 // CreateBot создает и запускает бота
-func CreateBot() {
+func New() (*VkBot, error) {
+	const op = "storage.vkbot.New"
+
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
 
 	group, err := vk.GroupsGetByID(nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	lp, err := longpoll.NewLongpoll(vk, group[0].ID)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
-
-	//botHandler(vk, lp)
 
 	log.Println("Start Long Poll")
 	if err := lp.Run(); err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
+
+	bot := &VkBot{vk: vk, lp: lp}
+
+	return bot, nil
 }
 
-// // botHandler обрабатывает сообщения бота
-// func botHandler(vk *api.VK, lp *longpoll.Longpoll) {
-// 	lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
-// 		b := params.NewMessagesSendBuilder()
-// 		b.RandomID(0)
-// 		b.PeerID(obj.Message.PeerID)
+// BotHandler обрабатывает сообщения бота
+func BotHandler(bot *VkBot) {
+	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
+		b := params.NewMessagesSendBuilder()
+		b.RandomID(0)
+		b.PeerID(obj.Message.PeerID)
 
-// 		log.Printf("%d: %s", obj.Message.PeerID, obj.Message.Text)
+		log.Printf("%d: %s", obj.Message.PeerID, obj.Message.Text)
 
-// 		userPeerID := strconv.Itoa(obj.Message.PeerID)
-// 		userMsg := obj.Message.Text
+		userPeerID := strconv.Itoa(obj.Message.PeerID)
+		userMsg := obj.Message.Text
 
-// 		// Обработка команд начала и возвращения
-// 		if userMsg == "Начать" || userMsg == "Вернуться" {
-// 			handleStartMessage(userPeerID, b)
-// 		} else {
-// 			handleUserMessage(userPeerID, userMsg, b)
-// 		}
+		// Обработка команд начала и возвращения
+		if userMsg == "Начать" || userMsg == "Вернуться" {
+			handleStartMessage(userPeerID, b)
+		} else {
+			//handleUserMessage(userPeerID, userMsg, b)
+		}
 
-// 		vk.MessagesSend(b.Params)
-// 	})
-// }
+		bot.vk.MessagesSend(b.Params)
+	})
+}
 
-// // handleStartMessage обрабатывает команду начала и возвращения
-// func handleStartMessage(userPeerID string, b *params.MessagesSendBuilder) {
-// 	if database.UserInBase(userPeerID) {
-// 		database.DeleteUser(userPeerID)
-// 	}
-// 	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
-// }
+// HandleStartMessage обрабатывает команду начала и возвращения
+func handleStartMessage(userPeerID string, b *params.MessagesSendBuilder) {
+	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+}
 
 // // handleUserMessage обрабатывает сообщения пользователя
 // func handleUserMessage(userPeerID, userMsg string, b *params.MessagesSendBuilder) {

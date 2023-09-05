@@ -2,8 +2,6 @@ github.com/BurntSushi/toml v1.2.1 h1:9F2/+DoOYIOksmaJFPw1tGFy1eDnIJXg+UHjuD8lTak
 github.com/BurntSushi/toml v1.2.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/SevereCloud/vksdk v1.10.0 h1:iKK2hHJSyW2yzd3ask3fxKPxmvAJ+5bqyCs/Sn4IBRQ=
 github.com/SevereCloud/vksdk v1.10.0/go.mod h1:BUxU4W2WoFwFU83aopUmXKTjbdgDgEDCTGdOJfdxSB0=
-github.com/ZiganshinDev/scheduleVKBot v0.0.0-20230521184204-4aec338e4b86 h1:R6nA3iY36oTHYiYIo8/4WOHSBPPVi1UYbg1lEsvPvn4=
-github.com/ZiganshinDev/scheduleVKBot v0.0.0-20230521184204-4aec338e4b86/go.mod h1:S6SYuLRbQfp5lvv6dSbT522M2dX99W61UkiPMdMaX0o=
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gorilla/schema v1.1.0/go.mod h1:kgLaKoK1FELgZqMAVxx/5cbj0kT+57qxUrAlIO2eleU=

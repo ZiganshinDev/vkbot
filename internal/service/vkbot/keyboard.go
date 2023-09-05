@@ -1,4 +1,4 @@
-package service
+package vkbot
 
 func getKeyboard(str string) string {
 	mKeyboard := map[string]string{
