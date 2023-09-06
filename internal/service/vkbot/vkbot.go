@@ -62,17 +62,20 @@ func botHandler(bot *VkBot, storage storage.Storage) {
 		if user.Message == "Начать" || user.Message == "Вернуться" {
 			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 		} else {
-			if !storage.CheckUser(user.PeerId) {
+			if ok, err := storage.CheckUser(user.PeerId); ok && err == nil {
 				user.Message = strings.TrimSpace(user.Message)
 				text := strings.Split(user.Message, " ")
-				if len(text) != 3 || !storage.CheckSchedule(text[0], text[1], text[2]) {
+				if len(text) != 3 {
 					b.Message("Я не понимаю твоего сообщения")
-				} else {
+				}
+				if ok, err := storage.CheckSchedule(text[0], text[1], text[2]); ok && err == nil {
 					storage.AddUser(text[0], text[1], text[2], user.PeerId)
 					b.Message("Выбери неделю")
 					b.Keyboard(getKeyboard("week"))
+				} else {
+					b.Message("Я не понимаю твоего сообщения")
 				}
-			} else if !storage.UserCheckWeek(user.PeerId) {
+			} else if ok, err := storage.UserCheckWeek(user.PeerId); ok && err == nil {
 				if user.Message == "Нечетная неделя" || user.Message == "Четная неделя" {
 					weekType := strings.Split(user.Message, " ")[0]
 					storage.UserAddWeek(weekType, user.PeerId)

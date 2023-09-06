@@ -11,9 +11,9 @@ var (
 
 type Storage interface {
 	GetSchedule(institute string, peerId int) (string, error)
-	AddUser(institute string, course string, group string, peerId int) error
-	CheckSchedule(institute string, course string, group string) bool
-	CheckUser(peerId int) bool
-	UserCheckWeek(peerId int) bool
+	AddUser(institute string, course string, groupNumber string, peerId int) error
+	CheckSchedule(institute string, course string, groupNumber string) (bool, error)
+	CheckUser(peerId int) (bool, error)
+	UserCheckWeek(peerId int) (bool, error)
 	UserAddWeek(week string, peerId int)
 }
