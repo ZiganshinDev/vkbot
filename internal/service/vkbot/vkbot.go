@@ -60,6 +60,8 @@ func botHandler(bot *VkBot, storage storage.Storage) {
 
 		// Обработка команд начала и возвращения
 		if user.Message == "Начать" || user.Message == "Вернуться" {
+			storage.DeleteUser(user.PeerId)
+
 			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 		} else {
 			if ok, err := storage.CheckUser(user.PeerId); ok && err == nil {
@@ -67,8 +69,7 @@ func botHandler(bot *VkBot, storage storage.Storage) {
 				text := strings.Split(user.Message, " ")
 				if len(text) != 3 {
 					b.Message("Я не понимаю твоего сообщения")
-				}
-				if ok, err := storage.CheckSchedule(text[0], text[1], text[2]); ok && err == nil {
+				} else if ok, err := storage.CheckSchedule(text[0], text[1], text[2]); ok && err == nil {
 					storage.AddUser(text[0], text[1], text[2], user.PeerId)
 					b.Message("Выбери неделю")
 					b.Keyboard(getKeyboard("week"))
@@ -91,7 +92,7 @@ func botHandler(bot *VkBot, storage storage.Storage) {
 			} else if isDayOfWeek(user.Message) {
 				schedule, err := storage.GetSchedule(user.Message, user.PeerId)
 				if err != nil {
-					log.Fatal(err)
+					b.Message("Я не понимаю твоего сообщения")
 				}
 				b.Message(schedule)
 			} else {

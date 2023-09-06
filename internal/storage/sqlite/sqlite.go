@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/ZiganshinDev/scheduleVKBot/internal/storage"
 	_ "github.com/mattn/go-sqlite3"
@@ -27,9 +28,20 @@ func New(storagePath string) (*Storage, error) {
 		user_id INTEGER PRIMARY KEY,
 		institute TEXT,
 		course INTEGER,
-		group_number INTEGER
-		peer_id TEXT UNIQUE,
+		group_number INTEGER,
+		peer_id INTEGER,
 		week TEXT);
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	stmt, err = db.Prepare(`
 	CREATE TABLE IF NOT EXISTS schedule(
 		lesson_id INTEGER PRIMARY KEY,
 		institute TEXT,
@@ -43,6 +55,7 @@ func New(storagePath string) (*Storage, error) {
 		lesson_number INTEGER,
 		week TEXT);
 	`)
+
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -57,15 +70,16 @@ func New(storagePath string) (*Storage, error) {
 
 func (s *Storage) GetSchedule(day string, peerId int) (string, error) {
 	const op = "storage.sqlite.GetSchedule"
-	//TODO CHANGE WITH JOIN
-	stmt, err := s.db.Prepare("SELECT schedule.*, users.* FROM schedule INNER JOIN users ON schedule.institute = users.institute AND schedule.course = users.course AND schedule.group_number = users.group_number WHERE users.day = ? AND users.peer_id = ?;")
+
+	stmt, err := s.db.Prepare("SELECT schedule.lesson_name, schedule.lesson_type, schedule.date_range, schedule.audience, schedule.lesson_number FROM schedule INNER JOIN users ON schedule.institute = users.institute AND schedule.course = users.course AND schedule.group_number = users.group_number AND schedule.week = users.week WHERE schedule.day = ? AND users.peer_id = ? ORDER BY schedule.lesson_number;")
 	if err != nil {
 		return "", fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 
-	var schedule string
+	//TODO change to response struct
+	var lesson_name, lesson_type, date_range, audience, lesson_number string
 
-	err = stmt.QueryRow(day, peerId).Scan(&schedule)
+	err = stmt.QueryRow(day, peerId).Scan(&lesson_name, &lesson_type, &date_range, &audience, &lesson_number)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", storage.ErrNotFound
@@ -74,13 +88,18 @@ func (s *Storage) GetSchedule(day string, peerId int) (string, error) {
 		return "", fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
-	return schedule, nil
+	var result string
+
+	//TODO change to response struct
+	result = result + lesson_number + " " + lesson_type + ". " + lesson_name + " " + date_range + " " + audience
+
+	return result, nil
 }
 
 func (s *Storage) AddUser(institute string, course string, groupNumber string, peerId int) error {
 	const op = "storage.sqlite.AddUser"
 
-	stmt, err := s.db.Prepare("INSERT INTO users(institute, course, group_number) VALUES(?, ?, ?) WHERE peer_id = ?")
+	stmt, err := s.db.Prepare("INSERT INTO users(institute, course, group_number, peer_id) VALUES(?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -127,7 +146,7 @@ func (s *Storage) CheckUser(peerId int) (bool, error) {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var count int
+	var count string
 
 	err = stmt.QueryRow(peerId).Scan(&count)
 	if err != nil {
@@ -138,11 +157,11 @@ func (s *Storage) CheckUser(peerId int) (bool, error) {
 		return false, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
-	if count == 0 {
-		return false, nil
+	if count, err := strconv.Atoi(count); count == 0 && err == nil {
+		return true, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func (s *Storage) UserCheckWeek(peerId int) (bool, error) {
@@ -153,7 +172,7 @@ func (s *Storage) UserCheckWeek(peerId int) (bool, error) {
 		return false, fmt.Errorf("%s: %w", op, err)
 	}
 
-	var count int
+	var count string
 
 	err = stmt.QueryRow(peerId).Scan(&count)
 	if err != nil {
@@ -164,23 +183,37 @@ func (s *Storage) UserCheckWeek(peerId int) (bool, error) {
 		return false, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
-	if count == 0 {
-		return false, nil
+	if count, err := strconv.Atoi(count); count == 0 && err == nil {
+		return true, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func (s *Storage) UserAddWeek(week string, peerId int) {
 	const op = "storage.sqlite.UserAddWeek"
 
-	stmt, err := s.db.Prepare("UPDATE users SET users.week = ? WHERE users.peer_id = ?")
+	stmt, err := s.db.Prepare("UPDATE users SET week = ? WHERE peer_id = ?")
 	if err != nil {
-		log.Fatalf("%s: %s", op, err)
+		log.Printf("%s: %s", op, err)
 	}
 
 	_, err = stmt.Exec(week, peerId)
 	if err != nil {
-		log.Fatalf("%s: %s", op, err)
+		log.Printf("%s: %s", op, err)
+	}
+}
+
+func (s *Storage) DeleteUser(peerId int) {
+	const op = "storage.sqlite.DeleteUser"
+
+	stmt, err := s.db.Prepare("DELETE FROM users WHERE peer_id = ?")
+	if err != nil {
+		log.Printf("%s: %s", op, err)
+	}
+
+	_, err = stmt.Exec(peerId)
+	if err != nil {
+		log.Printf("%s: %s", op, err)
 	}
 }

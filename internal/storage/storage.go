@@ -16,4 +16,5 @@ type Storage interface {
 	CheckUser(peerId int) (bool, error)
 	UserCheckWeek(peerId int) (bool, error)
 	UserAddWeek(week string, peerId int)
+	DeleteUser(peerId int)
 }
