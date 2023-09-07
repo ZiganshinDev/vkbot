@@ -35,7 +35,7 @@ jobs:
       - name: Build app
         run: |
           go mod download
-          go build -o vkbot ./cmd/vkbot
+          CGO_ENABLED=0 go build -o vkbot ./cmd/vkbot
       - name: Deploy to VM
         run: |
           sudo apt-get install -y ssh rsync
