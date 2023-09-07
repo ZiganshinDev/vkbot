@@ -1,0 +1,15 @@
+[Unit]
+Description=VkBot
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/apps/vkbot
+ExecStart=/root/apps/vkbot/vkbot
+Restart=always
+RestartSec=4
+StandardOutput=inherit
+EnvironmentFile=/root/apps/vkbot/config.env
+
+[Install]
+WantedBy=multi-user.target
