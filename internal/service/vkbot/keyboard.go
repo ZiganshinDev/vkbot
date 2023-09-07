@@ -2,14 +2,14 @@ package vkbot
 
 func getKeyboard(str string) string {
 	mKeyboard := map[string]string{
-		"start": `{
+		"info": `{
 			"one_time": false,
 			"buttons": [
 			 [
 			  {
 			   "action": {
 				"type": "text",
-				"label": "ИАГ"
+				"label": "Инфо"
 				},
 				"color": "primary"
 				}

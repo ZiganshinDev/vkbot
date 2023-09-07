@@ -8,10 +8,19 @@ import (
 	"github.com/SevereCloud/vksdk/api"
 	"github.com/SevereCloud/vksdk/api/params"
 	"github.com/SevereCloud/vksdk/object"
-	"github.com/ZiganshinDev/scheduleVKBot/internal/storage"
 
 	longpoll "github.com/SevereCloud/vksdk/longpoll-bot"
 )
+
+type Storage interface {
+	GetSchedule(institute string, peerId int) (string, error)
+	AddUser(institute string, course string, groupNumber string, peerId int) error
+	CheckSchedule(institute string, course string, groupNumber string) (bool, error)
+	CheckUser(peerId int) (bool, error)
+	UserCheckWeek(peerId int) (bool, error)
+	UserAddWeek(week string, peerId int)
+	DeleteUser(peerId int)
+}
 
 type VkBot struct {
 	vk *api.VK
@@ -24,7 +33,7 @@ type User struct {
 }
 
 // New создает и запускает бота
-func New(storage storage.Storage) {
+func New(storage Storage) {
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
 
 	group, err := vk.GroupsGetByID(nil)
@@ -48,7 +57,7 @@ func New(storage storage.Storage) {
 }
 
 // botHandler обрабатывает сообщения
-func botHandler(bot *VkBot, storage storage.Storage) {
+func botHandler(bot *VkBot, storage Storage) {
 	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
 		b := params.NewMessagesSendBuilder()
 		b.RandomID(0)
@@ -62,9 +71,13 @@ func botHandler(bot *VkBot, storage storage.Storage) {
 		if user.Message == "Начать" || user.Message == "Вернуться" {
 			storage.DeleteUser(user.PeerId)
 
+			b.Keyboard(getKeyboard("info"))
 			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 		} else {
-			if ok, err := storage.CheckUser(user.PeerId); ok && err == nil {
+			if user.Message == "Инфо" {
+				b.Message("Это Чат-Бот с расписанием занятий НИУ МГСУ. \nЧтобы им воспользоваться напиши свои данные согласно инструкции: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+
+			} else if ok, err := storage.CheckUser(user.PeerId); ok && err == nil {
 				user.Message = strings.TrimSpace(user.Message)
 				text := strings.Split(user.Message, " ")
 				if len(text) != 3 {
