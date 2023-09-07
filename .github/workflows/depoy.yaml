@@ -11,7 +11,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      HOST: root@37.139.62.132
+      HOST: root@31.41.155.241
       DEPLOY_DIRECTORY: /root/apps/vkbot
       CONFIG_PATH: /root/apps/vkbot/config/prod.yaml
       ENV_FILE_PATH: /root/apps/vkbot/config.env
