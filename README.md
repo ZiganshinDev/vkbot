@@ -91,7 +91,10 @@
 
 # Демонстрация:
 
-![Imgur](https://i.imgur.com/dQkfkRT.png)
+![Imgur](https://i.imgur.com/g5p8hSN.png)
+![Imgur](https://i.imgur.com/TT2USkm.png)
+![Imgur](https://i.imgur.com/OeKpiEz.png)
+![Imgur](https://i.imgur.com/DrolXcH.png)
 
 # Проект с открытым исходным кодом
 
