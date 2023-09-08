@@ -1,6 +1,7 @@
 package vkbot
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -18,8 +19,8 @@ type Storage interface {
 	CheckSchedule(institute string, course string, groupNumber string) (bool, error)
 	CheckUser(peerId int) (bool, error)
 	UserCheckWeek(peerId int) (bool, error)
-	UserAddWeek(week string, peerId int)
-	DeleteUser(peerId int)
+	UserAddWeek(week string, peerId int) error
+	DeleteUser(peerId int) error
 }
 
 type VkBot struct {
@@ -33,17 +34,19 @@ type User struct {
 }
 
 // New создает и запускает бота
-func New(storage Storage) {
+func New(storage Storage) error {
+	const op = "service.vkbot.New"
+
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
 
 	group, err := vk.GroupsGetByID(nil)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	lp, err := longpoll.NewLongpoll(vk, group[0].ID)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	bot := &VkBot{vk: vk, lp: lp}
@@ -52,10 +55,13 @@ func New(storage Storage) {
 
 	log.Println("Start Long Poll")
 	if err := lp.Run(); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
+
+	return nil
 }
 
+// TODO change handler
 // botHandler обрабатывает сообщения
 func botHandler(bot *VkBot, storage Storage) {
 	const op = "service.vkbot.botHandler"
@@ -71,7 +77,9 @@ func botHandler(bot *VkBot, storage Storage) {
 
 		// Обработка команд начала и возвращения
 		if user.Message == "Начать" || user.Message == "Вернуться" {
-			storage.DeleteUser(user.PeerId)
+			if err := storage.DeleteUser(user.PeerId); err != nil {
+				log.Printf("%s: %s", op, err)
+			}
 
 			b.Keyboard(getKeyboard("info"))
 			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
@@ -82,6 +90,7 @@ func botHandler(bot *VkBot, storage Storage) {
 			} else if ok, err := storage.CheckUser(user.PeerId); ok && err == nil {
 				user.Message = strings.TrimSpace(user.Message)
 				text := strings.Split(user.Message, " ")
+
 				if len(text) != 3 {
 					b.Message("Я не понимаю твоего сообщения")
 				} else if ok, err := storage.CheckSchedule(text[0], text[1], text[2]); ok && err == nil {
@@ -94,23 +103,30 @@ func botHandler(bot *VkBot, storage Storage) {
 				} else {
 					b.Message("Я не понимаю твоего сообщения")
 				}
+
 			} else if ok, err := storage.UserCheckWeek(user.PeerId); ok && err == nil {
 				if user.Message == "Нечетная неделя" || user.Message == "Четная неделя" {
 					weekType := strings.Split(user.Message, " ")[0]
-					storage.UserAddWeek(weekType, user.PeerId)
+
+					if err := storage.UserAddWeek(weekType, user.PeerId); err != nil {
+						log.Printf("%s: %s", op, err)
+					}
 
 					b.Message("Выбери день недели")
+
 					if user.Message == "Нечетная неделя" {
 						b.Keyboard(getKeyboard("oddweek"))
 					} else {
 						b.Keyboard(getKeyboard("evenweek"))
 					}
+
 				} else {
 					b.Message("Я не понимаю твоего сообщения")
 				}
 			} else if isDayOfWeek(user.Message) {
 				schedule, err := storage.GetSchedule(user.Message, user.PeerId)
 				if err != nil {
+					log.Printf("%s: %s", op, err)
 					b.Message("Я не понимаю твоего сообщения")
 				}
 				b.Message(schedule)

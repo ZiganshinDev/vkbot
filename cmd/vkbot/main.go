@@ -39,7 +39,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	vkbot.New(storage)
+	if err := vkbot.New(storage); err != nil {
+		log.Error("failed to init vkbot", sl.Err(err))
+		os.Exit(1)
+	}
 }
 
 func setupLogger(env string) *slog.Logger {

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/ZiganshinDev/scheduleVKBot/internal/storage"
@@ -190,30 +189,34 @@ func (s *Storage) UserCheckWeek(peerId int) (bool, error) {
 	return false, nil
 }
 
-func (s *Storage) UserAddWeek(week string, peerId int) {
+func (s *Storage) UserAddWeek(week string, peerId int) error {
 	const op = "storage.sqlite.UserAddWeek"
 
 	stmt, err := s.db.Prepare("UPDATE users SET week = ? WHERE peer_id = ?")
 	if err != nil {
-		log.Printf("%s: %s", op, err)
+		return fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
 	_, err = stmt.Exec(week, peerId)
 	if err != nil {
-		log.Printf("%s: %s", op, err)
+		return fmt.Errorf("%s: execute statement: %w", op, err)
 	}
+
+	return nil
 }
 
-func (s *Storage) DeleteUser(peerId int) {
+func (s *Storage) DeleteUser(peerId int) error {
 	const op = "storage.sqlite.DeleteUser"
 
 	stmt, err := s.db.Prepare("DELETE FROM users WHERE peer_id = ?")
 	if err != nil {
-		log.Printf("%s: %s", op, err)
+		return fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
 	_, err = stmt.Exec(peerId)
 	if err != nil {
-		log.Printf("%s: %s", op, err)
+		return fmt.Errorf("%s: execute statement: %w", op, err)
 	}
+
+	return nil
 }
