@@ -58,6 +58,8 @@ func New(storage Storage) {
 
 // botHandler обрабатывает сообщения
 func botHandler(bot *VkBot, storage Storage) {
+	const op = "service.vkbot.botHandler"
+
 	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
 		b := params.NewMessagesSendBuilder()
 		b.RandomID(0)
@@ -83,7 +85,10 @@ func botHandler(bot *VkBot, storage Storage) {
 				if len(text) != 3 {
 					b.Message("Я не понимаю твоего сообщения")
 				} else if ok, err := storage.CheckSchedule(text[0], text[1], text[2]); ok && err == nil {
-					storage.AddUser(text[0], text[1], text[2], user.PeerId)
+					if err := storage.AddUser(text[0], text[1], text[2], user.PeerId); err != nil {
+						log.Printf("%s: %s", op, err)
+					}
+
 					b.Message("Выбери неделю")
 					b.Keyboard(getKeyboard("week"))
 				} else {
@@ -93,6 +98,7 @@ func botHandler(bot *VkBot, storage Storage) {
 				if user.Message == "Нечетная неделя" || user.Message == "Четная неделя" {
 					weekType := strings.Split(user.Message, " ")[0]
 					storage.UserAddWeek(weekType, user.PeerId)
+
 					b.Message("Выбери день недели")
 					if user.Message == "Нечетная неделя" {
 						b.Keyboard(getKeyboard("oddweek"))
@@ -113,7 +119,9 @@ func botHandler(bot *VkBot, storage Storage) {
 			}
 		}
 
-		bot.vk.MessagesSend(b.Params)
+		if _, err := bot.vk.MessagesSend(b.Params); err != nil {
+			log.Printf("%s: %s", op, err)
+		}
 	})
 }
 
