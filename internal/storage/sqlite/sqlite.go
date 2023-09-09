@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/ZiganshinDev/scheduleVKBot/internal/storage"
 	_ "github.com/mattn/go-sqlite3"
@@ -135,58 +134,6 @@ func (s *Storage) CheckSchedule(institute string, course string, groupNumber str
 	}
 
 	return true, nil
-}
-
-func (s *Storage) CheckUser(peerId int) (bool, error) {
-	const op = "storage.sqlite.CheckUser"
-
-	stmt, err := s.db.Prepare("SELECT COUNT(user_id) FROM users WHERE peer_id = ?")
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", op, err)
-	}
-
-	var count string
-
-	err = stmt.QueryRow(peerId).Scan(&count)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, storage.ErrNotFound
-		}
-
-		return false, fmt.Errorf("%s: execute statement: %w", op, err)
-	}
-
-	if count, err := strconv.Atoi(count); count == 0 && err == nil {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (s *Storage) UserCheckWeek(peerId int) (bool, error) {
-	const op = "storage.sqlite.UserCheckWeek"
-
-	stmt, err := s.db.Prepare("SELECT COUNT(week) FROM users WHERE peer_id = ?")
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", op, err)
-	}
-
-	var count string
-
-	err = stmt.QueryRow(peerId).Scan(&count)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, storage.ErrNotFound
-		}
-
-		return false, fmt.Errorf("%s: execute statement: %w", op, err)
-	}
-
-	if count, err := strconv.Atoi(count); count == 0 && err == nil {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func (s *Storage) UserAddWeek(week string, peerId int) error {
