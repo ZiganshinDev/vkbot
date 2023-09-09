@@ -142,6 +142,22 @@ func getKeyboard(str string) string {
 			   },
 			   "color": "positive"
 			  }
+			],
+			[
+			  {
+				"action": {
+				 "type": "text",
+				 "label": "Вернуться"
+				},
+				"color": "secondary"
+			   },
+			   {
+				"action": {
+				 "type": "text",
+				 "label": "Инфо"
+				 },
+				 "color": "primary"
+				 }
 			 ]
 			]
 		   }`,

@@ -21,7 +21,7 @@ const (
 func main() {
 	err := godotenv.Load("config.env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("error loading .env file")
 	}
 
 	cfg := config.MustLoad()
@@ -29,7 +29,7 @@ func main() {
 	log := setupLogger(cfg.Env)
 
 	log.Info(
-		"starting vkbot",
+		"Starting vkbot",
 		slog.String("env", cfg.Env))
 	log.Debug("debug messages are enabled")
 

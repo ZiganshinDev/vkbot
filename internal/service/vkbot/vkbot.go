@@ -28,11 +28,6 @@ type VkBot struct {
 	lp *longpoll.Longpoll
 }
 
-type User struct {
-	PeerId  int
-	Message string
-}
-
 // New создает и запускает бота
 func New(storage Storage) error {
 	const op = "service.vkbot.New"
@@ -51,7 +46,7 @@ func New(storage Storage) error {
 
 	bot := &VkBot{vk: vk, lp: lp}
 
-	botHandler(bot, storage)
+	registerHandlers(bot, storage)
 
 	log.Println("Start Long Poll")
 	if err := lp.Run(); err != nil {
@@ -61,77 +56,132 @@ func New(storage Storage) error {
 	return nil
 }
 
+const (
+	StateStart int = iota
+	StateRegister
+	StateWeekSelection
+	StateDaySelection
+)
+
 // TODO change handler
-// botHandler обрабатывает сообщения
-func botHandler(bot *VkBot, storage Storage) {
+func registerHandlers(bot *VkBot, storage Storage) {
 	const op = "service.vkbot.botHandler"
+
+	user := NewUserState()
 
 	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
 		b := params.NewMessagesSendBuilder()
 		b.RandomID(0)
 		b.PeerID(obj.Message.PeerID)
 
-		log.Printf("%d: %s", obj.Message.PeerID, obj.Message.Text)
+		peerId := obj.Message.PeerID
+		message := obj.Message.Text
+		state, exists := user.GetState(peerId)
+		if !exists {
+			user.SetState(peerId, StateStart)
+		}
 
-		user := &User{PeerId: obj.Message.PeerID, Message: obj.Message.Text}
+		log.Printf("%d: %s; %d", obj.Message.PeerID, obj.Message.Text, state)
 
-		// Обработка команд начала и возвращения
-		if user.Message == "Начать" || user.Message == "Вернуться" {
-			if err := storage.DeleteUser(user.PeerId); err != nil {
-				log.Printf("%s: %s", op, err)
-			}
+		switch message {
+		case "Инфо":
+			b.Message("Это Чат-Бот с расписанием занятий НИУ МГСУ. \nЧтобы им воспользоваться напиши свои данные согласно инструкции: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+		default:
+			switch state {
+			case StateStart:
+				b.Keyboard(getKeyboard("info"))
+				b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+				user.SetState(peerId, StateRegister)
 
-			b.Keyboard(getKeyboard("info"))
-			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
-		} else {
-			if user.Message == "Инфо" {
-				b.Message("Это Чат-Бот с расписанием занятий НИУ МГСУ. \nЧтобы им воспользоваться напиши свои данные согласно инструкции: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+			case StateRegister:
+				if message == "Вернуться" {
+					b.Keyboard(getKeyboard("info"))
+					b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+					break
+				}
 
-			} else if ok, err := storage.CheckUser(user.PeerId); ok && err == nil {
-				user.Message = strings.TrimSpace(user.Message)
-				text := strings.Split(user.Message, " ")
+				message = strings.TrimSpace(message)
+				text := strings.Split(message, " ")
 
 				if len(text) != 3 {
-					b.Message("Я не понимаю твоего сообщения")
+					str := "Проверь свои данные на соответствие: " + message
+					b.Message(str)
 				} else if ok, err := storage.CheckSchedule(text[0], text[1], text[2]); ok && err == nil {
-					if err := storage.AddUser(text[0], text[1], text[2], user.PeerId); err != nil {
+					if err := storage.AddUser(text[0], text[1], text[2], peerId); err != nil {
 						log.Printf("%s: %s", op, err)
+						str := "Проверь свои данные на соответствие: " + message
+						b.Message(str)
 					}
 
 					b.Message("Выбери неделю")
 					b.Keyboard(getKeyboard("week"))
+
+					user.SetState(peerId, StateWeekSelection)
 				} else {
-					b.Message("Я не понимаю твоего сообщения")
+					str := "Проверь свои данные на соответствие: " + message
+					b.Message(str)
 				}
 
-			} else if ok, err := storage.UserCheckWeek(user.PeerId); ok && err == nil {
-				if user.Message == "Нечетная неделя" || user.Message == "Четная неделя" {
-					weekType := strings.Split(user.Message, " ")[0]
+			case StateWeekSelection:
+				if message == "Вернуться" {
+					user.SetState(peerId, StateRegister)
+					if err := storage.DeleteUser(peerId); err != nil {
+						log.Printf("%s: %s", op, err)
+						b.Message("Я не понимаю твоего сообщения")
+						break
+					} else {
+						b.Keyboard(getKeyboard("info"))
+						b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+						break
+					}
+				}
 
-					if err := storage.UserAddWeek(weekType, user.PeerId); err != nil {
+				if isValidWeek(message) {
+					weekType := strings.Split(message, " ")[0]
+
+					if err := storage.UserAddWeek(weekType, peerId); err != nil {
 						log.Printf("%s: %s", op, err)
 					}
 
 					b.Message("Выбери день недели")
 
-					if user.Message == "Нечетная неделя" {
+					if message == "Нечетная неделя" {
 						b.Keyboard(getKeyboard("oddweek"))
 					} else {
 						b.Keyboard(getKeyboard("evenweek"))
 					}
 
+					user.SetState(peerId, StateDaySelection)
 				} else {
-					b.Message("Я не понимаю твоего сообщения")
+					str := "Проверь свои данные на соответствие: " + message
+					b.Message(str)
 				}
-			} else if isDayOfWeek(user.Message) {
-				schedule, err := storage.GetSchedule(user.Message, user.PeerId)
-				if err != nil {
-					log.Printf("%s: %s", op, err)
-					b.Message("Я не понимаю твоего сообщения")
+
+			case StateDaySelection:
+				if message == "Вернуться" {
+					user.SetState(peerId, StateRegister)
+					if err := storage.DeleteUser(peerId); err != nil {
+						log.Printf("%s: %s", op, err)
+						b.Message("Я не понимаю твоего сообщения")
+						break
+					} else {
+						b.Keyboard(getKeyboard("info"))
+						b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
+						break
+					}
 				}
-				b.Message(schedule)
-			} else {
-				b.Message("Я не понимаю твоего сообщения")
+
+				if isValidDay(message) {
+					if schedule, err := storage.GetSchedule(message, peerId); err != nil {
+						log.Printf("%s: %s", op, err)
+						b.Message("Я не понимаю твоего сообщения")
+					} else {
+						b.Message(schedule)
+					}
+				} else {
+					str := "Проверь свои данные на соответствие: " + message
+					b.Message(str)
+				}
 			}
 		}
 
@@ -141,8 +191,11 @@ func botHandler(bot *VkBot, storage Storage) {
 	})
 }
 
-// isDayOfWeek проверяет, является ли строка днем недели
-func isDayOfWeek(day string) bool {
+func isValidWeek(week string) bool {
+	return week == "Нечетная неделя" || week == "Четная неделя"
+}
+
+func isValidDay(day string) bool {
 	days := map[string]bool{
 		"Понедельник": true,
 		"Вторник":     true,
