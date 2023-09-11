@@ -39,8 +39,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := vkbot.New(storage); err != nil {
+	bot, err := vkbot.New(storage)
+	if err != nil {
 		log.Error("failed to init vkbot", sl.Err(err))
+		os.Exit(1)
+	}
+
+	if err := bot.Start(); err != nil {
+		log.Error("failed to start vkbot", sl.Err(err))
 		os.Exit(1)
 	}
 }

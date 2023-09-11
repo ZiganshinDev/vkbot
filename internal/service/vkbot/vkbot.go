@@ -14,39 +14,55 @@ import (
 )
 
 type VkBot struct {
-	vk *api.VK
-	lp *longpoll.Longpoll
+	vk             *api.VK
+	lp             *longpoll.Longpoll
+	scheduleReader ScheduleReader
+	userHandler    UserHandler
 }
 
 type Storage interface {
+	ScheduleReader
+	UserHandler
+}
+
+type ScheduleReader interface {
 	GetSchedule(institute string, peerId int) (string, error)
-	AddUser(institute string, course string, groupNumber string, peerId int) error
 	CheckSchedule(institute string, course string, groupNumber string) (bool, error)
+}
+
+type UserHandler interface {
+	AddUser(institute string, course string, groupNumber string, peerId int) error
 	UserAddWeek(week string, peerId int) error
 	DeleteUser(peerId int) error
 }
 
-func New(storage Storage) error {
+func New(storage Storage) (*VkBot, error) {
 	const op = "service.vkbot.New"
 
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
 
 	group, err := vk.GroupsGetByID(nil)
 	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	lp, err := longpoll.NewLongpoll(vk, group[0].ID)
 	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	bot := &VkBot{vk: vk, lp: lp}
+	bot := &VkBot{vk: vk, lp: lp, userHandler: storage, scheduleReader: storage}
 
-	registerHandlers(bot, storage)
+	return bot, nil
+}
+
+func (v *VkBot) Start() error {
+	const op = "service.vkbot.Start"
+
+	registerHandlers(v)
 
 	log.Println("Start Long Poll")
-	if err := lp.Run(); err != nil {
+	if err := v.lp.Run(); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -54,21 +70,30 @@ func New(storage Storage) error {
 }
 
 const (
-	StateStart int = iota
-	StateRegister
-	StateWeekSelection
-	StateDaySelection
+	stateStart int = iota
+	stateRegister
+	stateWeekSelection
+	stateDaySelection
 )
 
-func registerHandlers(bot *VkBot, storage Storage) {
+const (
+	infoMessage = "Инфо"
+	backMessage = "Вернуться"
+)
+
+func registerHandlers(bot *VkBot) {
+	const op = "service.vkbot.registerHandlers"
+
 	user := NewUserState()
 
 	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
-		handleMessage(bot, storage, user, obj)
+		if err := handleMessage(bot, user, obj); err != nil {
+			log.Printf("%s: %v", op, err)
+		}
 	})
 }
 
-func handleMessage(bot *VkBot, storage Storage, user *User, obj object.MessageNewObject) {
+func handleMessage(bot *VkBot, user *User, obj object.MessageNewObject) error {
 	const op = "service.op.handleMessage"
 
 	b := params.NewMessagesSendBuilder()
@@ -79,30 +104,33 @@ func handleMessage(bot *VkBot, storage Storage, user *User, obj object.MessageNe
 	text := obj.Message.Text
 	state, exists := user.GetState(peerId)
 	if !exists {
-		user.SetState(peerId, StateStart)
+		user.SetState(peerId, stateStart)
 	}
 
 	log.Printf("%d: %s; %d", peerId, text, state)
 
 	switch text {
-	case "Инфо":
+	case infoMessage:
 		sendInfoMessage(b)
 	default:
 		switch state {
-		case StateStart:
+		case stateStart:
 			handleStateStart(b, user, peerId, text)
-		case StateRegister:
-			handleStateRegister(b, user, peerId, text, storage)
-		case StateWeekSelection:
-			handleStateWeekSelection(b, user, peerId, text, storage)
-		case StateDaySelection:
-			handleStateDaySelection(b, user, peerId, text, storage)
+		case stateRegister:
+			handleStateRegister(b, user, peerId, text, bot.scheduleReader, bot.userHandler)
+		case stateWeekSelection:
+			handleStateWeekSelection(b, user, peerId, text, bot.userHandler)
+		case stateDaySelection:
+			handleStateDaySelection(b, user, peerId, text, bot.userHandler, bot.scheduleReader)
 		}
 	}
 
-	if _, err := bot.vk.MessagesSend(b.Params); err != nil {
-		log.Printf("%s: %s", op, err)
+	_, err := bot.vk.MessagesSend(b.Params)
+	if err != nil {
+		return fmt.Errorf("%s: %v", op, err)
 	}
+
+	return nil
 }
 
 func sendInfoMessage(b *params.MessagesSendBuilder) {
@@ -112,13 +140,13 @@ func sendInfoMessage(b *params.MessagesSendBuilder) {
 func handleStateStart(b *params.MessagesSendBuilder, user *User, peerId int, text string) {
 	b.Keyboard(getKeyboard("info"))
 	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
-	user.SetState(peerId, StateRegister)
+	user.SetState(peerId, stateRegister)
 }
 
-func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, text string, storage Storage) {
+func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, text string, scheduleReader ScheduleReader, userHandler UserHandler) {
 	const op = "service.vkbot.handleStateRegister"
 
-	if text == "Вернуться" {
+	if text == backMessage {
 		b.Keyboard(getKeyboard("info"))
 		b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 		return
@@ -130,8 +158,8 @@ func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, 
 	if len(parts) != 3 {
 		str := "Проверь свои данные на соответствие: " + text
 		b.Message(str)
-	} else if ok, err := storage.CheckSchedule(parts[0], parts[1], parts[2]); ok && err == nil {
-		if err := storage.AddUser(parts[0], parts[1], parts[2], peerId); err != nil {
+	} else if ok, err := scheduleReader.CheckSchedule(parts[0], parts[1], parts[2]); ok && err == nil {
+		if err := userHandler.AddUser(parts[0], parts[1], parts[2], peerId); err != nil {
 			log.Printf("%s: %s", op, err)
 			str := "Проверь свои данные на соответствие: " + text
 			b.Message(str)
@@ -140,19 +168,19 @@ func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, 
 		b.Message("Выбери неделю")
 		b.Keyboard(getKeyboard("week"))
 
-		user.SetState(peerId, StateWeekSelection)
+		user.SetState(peerId, stateWeekSelection)
 	} else {
 		str := "Проверь свои данные на соответствие: " + text
 		b.Message(str)
 	}
 }
 
-func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId int, text string, storage Storage) {
+func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId int, text string, userHandler UserHandler) {
 	const op = "service.vkbot.handleStateWeekSelection"
 
-	if text == "Вернуться" {
-		user.SetState(peerId, StateRegister)
-		if err := storage.DeleteUser(peerId); err != nil {
+	if text == backMessage {
+		user.SetState(peerId, stateRegister)
+		if err := userHandler.DeleteUser(peerId); err != nil {
 			log.Printf("%s: %s", op, err)
 			b.Message("Я не понимаю твоего сообщения")
 			return
@@ -166,7 +194,7 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 	if isValidWeek(text) {
 		weekType := strings.Split(text, " ")[0]
 
-		if err := storage.UserAddWeek(weekType, peerId); err != nil {
+		if err := userHandler.UserAddWeek(weekType, peerId); err != nil {
 			log.Printf("%s: %s", op, err)
 		}
 
@@ -178,19 +206,19 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 			b.Keyboard(getKeyboard("evenweek"))
 		}
 
-		user.SetState(peerId, StateDaySelection)
+		user.SetState(peerId, stateDaySelection)
 	} else {
 		str := "Проверь свои данные на соответствие: " + text
 		b.Message(str)
 	}
 }
 
-func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId int, text string, storage Storage) {
+func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId int, text string, userHandler UserHandler, scheduleReader ScheduleReader) {
 	const op = "service.vk.handleStateDaySelection"
 
-	if text == "Вернуться" {
-		user.SetState(peerId, StateRegister)
-		if err := storage.DeleteUser(peerId); err != nil {
+	if text == backMessage {
+		user.SetState(peerId, stateRegister)
+		if err := userHandler.DeleteUser(peerId); err != nil {
 			log.Printf("%s: %s", op, err)
 			b.Message("Я не понимаю твоего сообщения")
 			return
@@ -201,7 +229,7 @@ func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId i
 		}
 	}
 	if isValidDay(text) {
-		if schedule, err := storage.GetSchedule(text, peerId); err != nil {
+		if schedule, err := scheduleReader.GetSchedule(text, peerId); err != nil {
 			log.Printf("%s: %s", op, err)
 			b.Message("Я не понимаю твоего сообщения")
 		} else {
