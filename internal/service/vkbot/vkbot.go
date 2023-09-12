@@ -14,29 +14,19 @@ import (
 )
 
 type VkBot struct {
-	vk             *api.VK
-	lp             *longpoll.Longpoll
-	scheduleReader ScheduleReader
-	userHandler    UserHandler
+	vk *api.VK
+	lp *longpoll.Longpoll
 }
 
 type Storage interface {
-	ScheduleReader
-	UserHandler
-}
-
-type ScheduleReader interface {
+	AddUser(institute string, course string, groupNumber string, peerId int) error
+	UserAddWeek(week string, peerId int) error
+	DeleteUser(peerId int) error
 	GetSchedule(institute string, peerId int) (string, error)
 	CheckSchedule(institute string, course string, groupNumber string) (bool, error)
 }
 
-type UserHandler interface {
-	AddUser(institute string, course string, groupNumber string, peerId int) error
-	UserAddWeek(week string, peerId int) error
-	DeleteUser(peerId int) error
-}
-
-func New(storage Storage) (*VkBot, error) {
+func New() (*VkBot, error) {
 	const op = "service.vkbot.New"
 
 	vk := api.NewVK(os.Getenv("VK_TOKEN"))
@@ -51,15 +41,15 @@ func New(storage Storage) (*VkBot, error) {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	bot := &VkBot{vk: vk, lp: lp, userHandler: storage, scheduleReader: storage}
+	bot := &VkBot{vk: vk, lp: lp}
 
 	return bot, nil
 }
 
-func (v *VkBot) Start() error {
+func (v *VkBot) Start(storage Storage) error {
 	const op = "service.vkbot.Start"
 
-	registerHandlers(v)
+	registerHandlers(v, storage)
 
 	log.Println("Start Long Poll")
 	if err := v.lp.Run(); err != nil {
@@ -81,19 +71,19 @@ const (
 	backMessage = "Вернуться"
 )
 
-func registerHandlers(bot *VkBot) {
+func registerHandlers(bot *VkBot, storage Storage) {
 	const op = "service.vkbot.registerHandlers"
 
 	user := NewUserState()
 
 	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
-		if err := handleMessage(bot, user, obj); err != nil {
+		if err := handleMessage(bot, user, obj, storage); err != nil {
 			log.Printf("%s: %v", op, err)
 		}
 	})
 }
 
-func handleMessage(bot *VkBot, user *User, obj object.MessageNewObject) error {
+func handleMessage(bot *VkBot, user *User, obj object.MessageNewObject, storage Storage) error {
 	const op = "service.op.handleMessage"
 
 	b := params.NewMessagesSendBuilder()
@@ -101,33 +91,33 @@ func handleMessage(bot *VkBot, user *User, obj object.MessageNewObject) error {
 	b.PeerID(obj.Message.PeerID)
 
 	peerId := obj.Message.PeerID
-	text := obj.Message.Text
+	message := obj.Message.Text
 	state, exists := user.GetState(peerId)
 	if !exists {
 		user.SetState(peerId, stateStart)
 	}
 
-	log.Printf("%d: %s; %d", peerId, text, state)
+	log.Printf("%d: %s; %d", peerId, message, state)
 
-	switch text {
+	switch message {
 	case infoMessage:
 		sendInfoMessage(b)
 	default:
 		switch state {
 		case stateStart:
-			handleStateStart(b, user, peerId, text)
+			handleStateStart(b, user, peerId, message)
 		case stateRegister:
-			handleStateRegister(b, user, peerId, text, bot.scheduleReader, bot.userHandler)
+			handleStateRegister(b, user, peerId, message, storage)
 		case stateWeekSelection:
-			handleStateWeekSelection(b, user, peerId, text, bot.userHandler)
+			handleStateWeekSelection(b, user, peerId, message, storage)
 		case stateDaySelection:
-			handleStateDaySelection(b, user, peerId, text, bot.userHandler, bot.scheduleReader)
+			handleStateDaySelection(b, user, peerId, message, storage)
 		}
 	}
 
 	_, err := bot.vk.MessagesSend(b.Params)
 	if err != nil {
-		return fmt.Errorf("%s: %v", op, err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	return nil
@@ -137,31 +127,28 @@ func sendInfoMessage(b *params.MessagesSendBuilder) {
 	b.Message("Это Чат-Бот с расписанием занятий НИУ МГСУ. \nЧтобы им воспользоваться напиши свои данные согласно инструкции: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 }
 
-func handleStateStart(b *params.MessagesSendBuilder, user *User, peerId int, text string) {
+func handleStateStart(b *params.MessagesSendBuilder, user *User, peerId int, message string) {
 	b.Keyboard(getKeyboard("info"))
 	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 	user.SetState(peerId, stateRegister)
 }
 
-func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, text string, scheduleReader ScheduleReader, userHandler UserHandler) {
+func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
 	const op = "service.vkbot.handleStateRegister"
 
-	if text == backMessage {
+	if message == backMessage {
 		b.Keyboard(getKeyboard("info"))
 		b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 		return
 	}
 
-	text = strings.TrimSpace(text)
-	parts := strings.Split(text, " ")
-
-	if len(parts) != 3 {
-		str := "Проверь свои данные на соответствие: " + text
-		b.Message(str)
-	} else if ok, err := scheduleReader.CheckSchedule(parts[0], parts[1], parts[2]); ok && err == nil {
-		if err := userHandler.AddUser(parts[0], parts[1], parts[2], peerId); err != nil {
-			log.Printf("%s: %s", op, err)
-			str := "Проверь свои данные на соответствие: " + text
+	parts, err := validateRegisterMessage(message)
+	if err != nil {
+		b.Message("Проверь свои данные на соответствие: " + message)
+	} else if ok, err := storage.CheckSchedule(parts[0], parts[1], parts[2]); ok && err == nil {
+		if err := storage.AddUser(parts[0], parts[1], parts[2], peerId); err != nil {
+			log.Printf("%s: %v", op, err)
+			str := "Проверь свои данные на соответствие: " + message
 			b.Message(str)
 		}
 
@@ -170,18 +157,17 @@ func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, 
 
 		user.SetState(peerId, stateWeekSelection)
 	} else {
-		str := "Проверь свои данные на соответствие: " + text
-		b.Message(str)
+		b.Message("Проверь свои данные на соответствие: " + message)
 	}
 }
 
-func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId int, text string, userHandler UserHandler) {
+func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
 	const op = "service.vkbot.handleStateWeekSelection"
 
-	if text == backMessage {
+	if message == backMessage {
 		user.SetState(peerId, stateRegister)
-		if err := userHandler.DeleteUser(peerId); err != nil {
-			log.Printf("%s: %s", op, err)
+		if err := storage.DeleteUser(peerId); err != nil {
+			log.Printf("%s: %v", op, err)
 			b.Message("Я не понимаю твоего сообщения")
 			return
 		} else {
@@ -191,16 +177,16 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 		}
 	}
 
-	if isValidWeek(text) {
-		weekType := strings.Split(text, " ")[0]
+	if validateWeekMessage(message) {
+		weekType := strings.Split(message, " ")[0]
 
-		if err := userHandler.UserAddWeek(weekType, peerId); err != nil {
-			log.Printf("%s: %s", op, err)
+		if err := storage.UserAddWeek(weekType, peerId); err != nil {
+			log.Printf("%s: %v", op, err)
 		}
 
 		b.Message("Выбери день недели")
 
-		if text == "Нечетная неделя" {
+		if message == "Нечетная неделя" {
 			b.Keyboard(getKeyboard("oddweek"))
 		} else {
 			b.Keyboard(getKeyboard("evenweek"))
@@ -208,18 +194,17 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 
 		user.SetState(peerId, stateDaySelection)
 	} else {
-		str := "Проверь свои данные на соответствие: " + text
-		b.Message(str)
+		b.Message("Проверь свои данные на соответствие: " + message)
 	}
 }
 
-func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId int, text string, userHandler UserHandler, scheduleReader ScheduleReader) {
+func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
 	const op = "service.vk.handleStateDaySelection"
 
-	if text == backMessage {
+	if message == backMessage {
 		user.SetState(peerId, stateRegister)
-		if err := userHandler.DeleteUser(peerId); err != nil {
-			log.Printf("%s: %s", op, err)
+		if err := storage.DeleteUser(peerId); err != nil {
+			log.Printf("%s: %v", op, err)
 			b.Message("Я не понимаю твоего сообщения")
 			return
 		} else {
@@ -228,24 +213,35 @@ func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId i
 			return
 		}
 	}
-	if isValidDay(text) {
-		if schedule, err := scheduleReader.GetSchedule(text, peerId); err != nil {
-			log.Printf("%s: %s", op, err)
+	if validateDayMessage(message) {
+		if schedule, err := storage.GetSchedule(message, peerId); err != nil {
+			log.Printf("%s: %v", op, err)
 			b.Message("Я не понимаю твоего сообщения")
 		} else {
 			b.Message(schedule)
 		}
 	} else {
-		str := "Проверь свои данные на соответствие: " + text
-		b.Message(str)
+		b.Message("Проверь свои данные на соответствие: " + message)
 	}
 }
 
-func isValidWeek(week string) bool {
+func validateRegisterMessage(message string) ([]string, error) {
+	var result []string
+
+	message = strings.TrimSpace(message)
+	result = strings.Split(message, " ")
+	if len(result) != 3 {
+		return nil, fmt.Errorf("len != 3")
+	}
+
+	return result, nil
+}
+
+func validateWeekMessage(week string) bool {
 	return week == "Нечетная неделя" || week == "Четная неделя"
 }
 
-func isValidDay(day string) bool {
+func validateDayMessage(day string) bool {
 	days := map[string]bool{
 		"Понедельник": true,
 		"Вторник":     true,
