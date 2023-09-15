@@ -13,15 +13,15 @@ func NewUserState() *User {
 	}
 }
 
-func (us *User) SetState(peerId int, state int) {
+func (us *User) SetState(peerID int, state int) {
 	us.mu.Lock()
 	defer us.mu.Unlock()
-	us.states[peerId] = state
+	us.states[peerID] = state
 }
 
-func (us *User) GetState(peerId int) (int, bool) {
+func (us *User) GetState(peerID int) (int, bool) {
 	us.mu.Lock()
 	defer us.mu.Unlock()
-	state, ok := us.states[peerId]
+	state, ok := us.states[peerID]
 	return state, ok
 }
