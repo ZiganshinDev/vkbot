@@ -1,6 +1,6 @@
 package vkbot
 
-func getKeyboard(str string) string {
+func (v *VkBot) getKeyboard(str string) string {
 	mKeyboard := map[string]string{
 		"info": `{
 			"one_time": false,

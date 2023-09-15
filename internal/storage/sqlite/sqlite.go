@@ -74,22 +74,26 @@ func (s *Storage) GetSchedule(day string, peerId int) (string, error) {
 		return "", fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 
-	//TODO change to response struct
-	var lesson_name, lesson_type, date_range, audience, lesson_number string
-
-	err = stmt.QueryRow(day, peerId).Scan(&lesson_name, &lesson_type, &date_range, &audience, &lesson_number)
+	rows, err := stmt.Query(day, peerId)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", storage.ErrNotFound
-		}
-
 		return "", fmt.Errorf("%s: execute statement: %w", op, err)
 	}
+	defer rows.Close()
 
 	var result string
 
-	//TODO change to response struct
-	result = result + lesson_number + " " + lesson_type + ". " + lesson_name + " " + date_range + " " + audience
+	for rows.Next() {
+		var lesson_name, lesson_type, date_range, audience, lesson_number string
+		if err := rows.Scan(&lesson_name, &lesson_type, &date_range, &audience, &lesson_number); err != nil {
+			return "", fmt.Errorf("%s: scan row: %w", op, err)
+		}
+
+		result += lesson_number + " " + lesson_type + ". " + lesson_name + " " + date_range + " " + audience + "\n"
+	}
+
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("%s: iterate rows: %w", op, err)
+	}
 
 	return result, nil
 }

@@ -49,7 +49,7 @@ func New() (*VkBot, error) {
 func (v *VkBot) Start(storage Storage) error {
 	const op = "service.vkbot.Start"
 
-	registerHandlers(v, storage)
+	v.registerHandlers(storage)
 
 	log.Println("Start Long Poll")
 	if err := v.lp.Run(); err != nil {
@@ -71,19 +71,19 @@ const (
 	backMessage = "Вернуться"
 )
 
-func registerHandlers(bot *VkBot, storage Storage) {
+func (v *VkBot) registerHandlers(storage Storage) {
 	const op = "service.vkbot.registerHandlers"
 
 	user := NewUserState()
 
-	bot.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
-		if err := handleMessage(bot, user, obj, storage); err != nil {
+	v.lp.MessageNew(func(obj object.MessageNewObject, groupID int) {
+		if err := v.handleMessage(user, obj, storage); err != nil {
 			log.Printf("%s: %v", op, err)
 		}
 	})
 }
 
-func handleMessage(bot *VkBot, user *User, obj object.MessageNewObject, storage Storage) error {
+func (v *VkBot) handleMessage(user *User, obj object.MessageNewObject, storage Storage) error {
 	const op = "service.op.handleMessage"
 
 	b := params.NewMessagesSendBuilder()
@@ -105,17 +105,17 @@ func handleMessage(bot *VkBot, user *User, obj object.MessageNewObject, storage 
 	default:
 		switch state {
 		case stateStart:
-			handleStateStart(b, user, peerId, message)
+			v.handleStateStart(b, user, peerId, message)
 		case stateRegister:
-			handleStateRegister(b, user, peerId, message, storage)
+			v.handleStateRegister(b, user, peerId, message, storage)
 		case stateWeekSelection:
-			handleStateWeekSelection(b, user, peerId, message, storage)
+			v.handleStateWeekSelection(b, user, peerId, message, storage)
 		case stateDaySelection:
-			handleStateDaySelection(b, user, peerId, message, storage)
+			v.handleStateDaySelection(b, user, peerId, message, storage)
 		}
 	}
 
-	_, err := bot.vk.MessagesSend(b.Params)
+	_, err := v.vk.MessagesSend(b.Params)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -127,17 +127,17 @@ func sendInfoMessage(b *params.MessagesSendBuilder) {
 	b.Message("Это Чат-Бот с расписанием занятий НИУ МГСУ. \nЧтобы им воспользоваться напиши свои данные согласно инструкции: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 }
 
-func handleStateStart(b *params.MessagesSendBuilder, user *User, peerId int, message string) {
-	b.Keyboard(getKeyboard("info"))
+func (v *VkBot) handleStateStart(b *params.MessagesSendBuilder, user *User, peerId int, message string) {
+	b.Keyboard(v.getKeyboard("info"))
 	b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 	user.SetState(peerId, stateRegister)
 }
 
-func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
+func (v *VkBot) handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
 	const op = "service.vkbot.handleStateRegister"
 
 	if message == backMessage {
-		b.Keyboard(getKeyboard("info"))
+		b.Keyboard(v.getKeyboard("info"))
 		b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 		return
 	}
@@ -153,7 +153,7 @@ func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, 
 		}
 
 		b.Message("Выбери неделю")
-		b.Keyboard(getKeyboard("week"))
+		b.Keyboard(v.getKeyboard("week"))
 
 		user.SetState(peerId, stateWeekSelection)
 	} else {
@@ -161,7 +161,7 @@ func handleStateRegister(b *params.MessagesSendBuilder, user *User, peerId int, 
 	}
 }
 
-func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
+func (v *VkBot) handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
 	const op = "service.vkbot.handleStateWeekSelection"
 
 	if message == backMessage {
@@ -171,7 +171,7 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 			b.Message("Я не понимаю твоего сообщения")
 			return
 		} else {
-			b.Keyboard(getKeyboard("info"))
+			b.Keyboard(v.getKeyboard("info"))
 			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 			return
 		}
@@ -187,9 +187,9 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 		b.Message("Выбери день недели")
 
 		if message == "Нечетная неделя" {
-			b.Keyboard(getKeyboard("oddweek"))
+			b.Keyboard(v.getKeyboard("oddweek"))
 		} else {
-			b.Keyboard(getKeyboard("evenweek"))
+			b.Keyboard(v.getKeyboard("evenweek"))
 		}
 
 		user.SetState(peerId, stateDaySelection)
@@ -198,7 +198,7 @@ func handleStateWeekSelection(b *params.MessagesSendBuilder, user *User, peerId 
 	}
 }
 
-func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
+func (v *VkBot) handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId int, message string, storage Storage) {
 	const op = "service.vk.handleStateDaySelection"
 
 	if message == backMessage {
@@ -208,7 +208,7 @@ func handleStateDaySelection(b *params.MessagesSendBuilder, user *User, peerId i
 			b.Message("Я не понимаю твоего сообщения")
 			return
 		} else {
-			b.Keyboard(getKeyboard("info"))
+			b.Keyboard(v.getKeyboard("info"))
 			b.Message("Напиши свои данные вот так: \nИНСТИТУТ КУРС ГРУППА \nНапример: ИГЭС 1 37")
 			return
 		}
